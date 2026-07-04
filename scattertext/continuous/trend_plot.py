@@ -52,7 +52,7 @@ class TrendPlotSettings(ABC):
 class DispersionPlotSettings(TrendPlotSettings):
     def __init__(
             self,
-            category_order: List = None,
+            category_order: Optional[List] = None,
             metric: str = 'DA',
             use_residual: bool = True,
             term_ranker: Optional[TermRanker] = None,

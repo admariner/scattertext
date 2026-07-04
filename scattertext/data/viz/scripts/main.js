@@ -91,6 +91,7 @@ buildViz = function (d3) {
                      documentWord = "document",
                      documentWordPlural = "documents",
                      categoryOrder = null,
+                     granularCategoryOrder = null,
                      includeGradient = false,
                      leftGradientTerm = null,
                      middleGradientTerm = null,
@@ -99,6 +100,7 @@ buildViz = function (d3) {
                      gradientColors = null,
                      categoryTermScoreScaler = null,
                      showChart = true,
+                     enableZoom = false,
     ) {
 
         function formatTermForDisplay(term) {
@@ -313,13 +315,123 @@ buildViz = function (d3) {
 
         // Adds the svg canvas
         // var svg = d3.select("body")
-        svg = d3.select('#' + divName)
+        var baseSvg = d3.select('#' + divName)
             .append("svg")
             .attr("width", width + margin.left + margin.right + pixelsToAddToWidth)
-            .attr("height", height + margin.top + margin.bottom)
+            .attr("height", height + margin.top + margin.bottom);
+
+        var svg = baseSvg
             .append("g")
             .attr("transform",
                 "translate(" + margin.left + "," + margin.top + ")");
+
+        var plotClipId = divName + "-plot-clip";
+        svg.append("defs")
+            .append("clipPath")
+            .attr("id", plotClipId)
+            .append("rect")
+            .attr("x", 0)
+            .attr("y", 0)
+            .attr("width", width)
+            .attr("height", height);
+
+        function clipToPlot(selection) {
+            if (enableZoom) {
+                selection.attr("clip-path", "url(#" + plotClipId + ")");
+            }
+            return selection;
+        }
+
+        var currentZoomTransform = d3.zoomIdentity;
+        var zoomBehavior = null;
+
+        function isInPlotArea() {
+            var mouse = d3.mouse(baseSvg.node());
+            return mouse[0] >= margin.left
+                && mouse[0] <= margin.left + width
+                && mouse[1] >= margin.top
+                && mouse[1] <= margin.top + height;
+        }
+
+        function zoomedX(value) {
+            return currentZoomTransform.applyX(x(value));
+        }
+
+        function zoomedY(value) {
+            return currentZoomTransform.applyY(y(value));
+        }
+
+        function zoomLinePath(lineData) {
+            return d3.line()
+                .x(function (d) {
+                    return zoomedX(d.x);
+                })
+                .y(function (d) {
+                    return zoomedY(d.y);
+                })(lineData);
+        }
+
+        var applyZoomToScatterplot = function () {
+            svg.selectAll(".zoom-point")
+                .attr("cx", function (d) {
+                    return zoomedX(d.x);
+                })
+                .attr("cy", function (d) {
+                    return zoomedY(d.y);
+                });
+
+            svg.selectAll(".zoom-label")
+                .attr("x", function () {
+                    return zoomedX(+this.getAttribute("data-plot-x")) + +this.getAttribute("data-x-offset");
+                })
+                .attr("y", function () {
+                    return zoomedY(+this.getAttribute("data-plot-y")) + +this.getAttribute("data-y-offset");
+                });
+
+            svg.selectAll(".zoom-background-label")
+                .attr("x", function () {
+                    return zoomedX(+this.getAttribute("data-plot-x"));
+                })
+                .attr("y", function () {
+                    return zoomedY(+this.getAttribute("data-plot-y"));
+                });
+
+            svg.selectAll(".zoom-line")
+                .attr("d", function (d) {
+                    return zoomLinePath(d);
+                });
+        };
+        var finishZoomScatterplot = function () {};
+
+        function resetZoom() {
+            if (zoomBehavior !== null) {
+                baseSvg
+                    .transition()
+                    .duration(250)
+                    .call(zoomBehavior.transform, d3.zoomIdentity);
+            }
+        }
+
+        if (enableZoom) {
+            zoomBehavior = d3.zoom()
+                .scaleExtent([1, 32])
+                .filter(function () {
+                    return isInPlotArea();
+                })
+                .on("zoom", function () {
+                    currentZoomTransform = d3.event.transform;
+                    applyZoomToScatterplot();
+                })
+                .on("end", function () {
+                    finishZoomScatterplot();
+                });
+            baseSvg.call(zoomBehavior);
+            baseSvg.on("dblclick.zoom", function () {
+                if (isInPlotArea()) {
+                    resetZoom();
+                }
+            });
+        }
 
 
         origSVGLeft = svg.node().getBoundingClientRect().left;
@@ -906,7 +1018,15 @@ buildViz = function (d3) {
                 )
             }
         }
-
+        function getCategoryLabelIndex(key) {
+            if (categoryOrder === null)
+                return null
+            var catIndex = categoryOrder.indexOf(fullData.docs.categories[key]);
+            if (catIndex == -1 && granularCategoryOrder !== undefined && granularCategoryOrder !== null) {
+                catIndex = granularCategoryOrder.indexOf(fullData.docs.categories[key])
+            }
+            return catIndex;
+        }
         function displayLineChart(termInfo, contexts) {
             var divid = "#" + divName + "-lineplot",
                 margin = {top: 10, right: 30, bottom: 30, left: 80},
@@ -966,12 +1086,8 @@ buildViz = function (d3) {
             console.log(['A'] !== undefined)
             console.log(['A'] === undefined)
             console.log(['A'] == undefined)
+            console.log("granularCategoryOrder"); console.log(granularCategoryOrder)
 
-            function getCategoryLabelIndex(key) {
-                if (categoryOrder === null)
-                    return null
-                return categoryOrder.indexOf(fullData.docs.categories[key])
-            }
 
             var docLabelCountsSorted = Object.keys(docLabelCounts).map(key => ({
                "label": fullData.docs.categories[key],
@@ -979,15 +1095,15 @@ buildViz = function (d3) {
                "labelNum": key,
                "matches": numMatches[key] || 0,
                "overall": docLabelCounts[key],
-               'percent': (numMatches[key] || 0) * 100. / docLabelCounts[key]
+               'percent': (numMatches[key] || 0) * 100. / docLabelCounts[key],
                })
             )
 
-            console.log("docLabelCountsSorted"); console.log(docLabelCountsSorted)
-            if(sortDocLabelsByName || categoryOrder !== null) {
+            console.log("docLabelCountsSorted C"); console.log(docLabelCountsSorted)
+            if(sortDocLabelsByName || categoryOrder !== null || (granularCategoryOrder !== null && granularCategoryOrder != undefined)) {
                 console.log("SORTING BY LABELS OR CATEGORY ORDER")
                 docLabelCountsSorted = docLabelCountsSorted.sort(function (a, b) {
-                   if(categoryOrder !== null) {
+                   if(categoryOrder !== null || (granularCategoryOrder !== null && granularCategoryOrder !== undefined)) {
                         return a['labelIndex'] < b['labelIndex'] ? -1 : a['labelIndex'] > b['labelIndex'] ? 1 : 0
                    }
 
@@ -996,6 +1112,7 @@ buildViz = function (d3) {
             }
 
             docLabelCountsSorted = docLabelCountsSorted.map((v, idx) => ({...v, idx: idx}));
+            console.log("docLabelCountsSorted post"); console.log(docLabelCountsSorted)
 
             var chartData = d3.entries(docLabelCountsSorted);
 
@@ -1058,7 +1175,7 @@ buildViz = function (d3) {
                     window.location.hash = divId + 'egory' + clickedIndex;
                     chartTooltip.transition().duration(0).style('opacity', 0)
                 })
-
+            console.log("chartData")
             console.log(chartData)
             var valueline = d3.line()
                 .x(function (d) {
@@ -1067,7 +1184,15 @@ buildViz = function (d3) {
                 .y(function (d) {
                     return charty(d.percent);
                 });
-
+            var docLabelCountsSortedForLine = docLabelCountsSorted;
+            if(categoryOrder !== null || (granularCategoryOrder !== null && granularCategoryOrder !== undefined)) {
+                console.log("Skipping resort")
+            } else {
+                docLabelCountsSortedForLine = docLabelCountsSortedForLine.sort((a, b) => b.x - a.x)
+                console.log("Pefromred resort")
+            }
+            console.log("docLabelCountsSortedForLine")
+            console.log(docLabelCountsSortedForLine)
             linesvg.append("path")
                 .attr("class", "line")
                 //.style("stroke-dasharray", "5,5")
@@ -1076,7 +1201,7 @@ buildViz = function (d3) {
                 .attr("fill", "none")
                 .attr("stroke", function(d){ return '#0000FF' })
                 .attr("stroke-width", 1)
-                .attr("d", valueline(docLabelCountsSorted.sort((a, b) => b.x - a.x)))
+                .attr("d", valueline(docLabelCountsSortedForLine))
             var chartTooltip = d3.select('#' + divName)
                 .append("div")
                 .attr("class", "tooltipscore")
@@ -1132,15 +1257,15 @@ buildViz = function (d3) {
                 if (notmatches !== undefined)
                     allNotMatches = notmatches[0].concat(notmatches[1]).concat(notmatches[2]).concat(notmatches[3]);
                 d3.select('#' + divName + '-' + 'categoryinfo').selectAll("div").remove();
-                var numDocs = fullData.docs.texts.length.toLocaleString('en');
+                var numDocs = fullData.docs.texts.length;
                 var numMatches = allContexts.length;
                 d3.select(divId)
                     .append("div")
                     .attr('class', 'topic_preview')
                     .attr('text-align', "center")
                     .html(
-                        "Matched " + numMatches + " out of " + numDocs + ' ' + documentWordPlural + ': '
-                        + parseFloat(100 * parseInt(numMatches) / parseInt(numDocs)).toFixed(4) + '%'
+                        "Matched " + numMatches.toLocaleString('en') + " out of " + numDocs.toLocaleString('en') + ' ' + documentWordPlural + ': '
+                        + parseFloat(100 * numMatches / numDocs).toFixed(4) + '%'
                     );
 
                 if (allContexts.length > 0) {
@@ -1181,6 +1306,7 @@ buildViz = function (d3) {
                          addSnippets(singleDoc, divId);
                      });
                  });*/
+                console.log("docLabelCounts"); console.log(docLabelCounts)
                 console.log("ORDERING !!!!!");
                 console.log(fullData.info.category_name);
                 console.log(sortDocLabelsByName);
@@ -1188,11 +1314,15 @@ buildViz = function (d3) {
                     {
                         "label": fullData.docs.categories[key],
                         "labelNum": key,
+                        "labelIndex": getCategoryLabelIndex(key),
                         "matches": numMatches[key] || 0,
                         "overall": docLabelCounts[key],
                         'percent': (numMatches[key] || 0) * 100. / docLabelCounts[key]
                     }))
                     .sort(function (a, b) {
+                        if(categoryOrder !== null || (granularCategoryOrder !== null && granularCategoryOrder !== undefined)) {
+                            return a['labelIndex'] < b['labelIndex'] ? -1 : a['labelIndex'] > b['labelIndex'] ? 1 : 0
+                        }
                         if (highlightSelectedCategory) {
                             if (a['label'] === fullData.info.category_name) {
                                 return -1;
@@ -1208,7 +1338,7 @@ buildViz = function (d3) {
                         }
                     });
 
-                console.log("docLabelCountsSorted")
+                console.log("docLabelCountsSorted A")
                 console.log(docLabelCountsSorted);
                 console.log(numMatches)
                 console.log('#' + divName + '-' + 'categoryinfo')
@@ -1238,19 +1368,19 @@ buildViz = function (d3) {
                         htmlToAdd += "<b>" + counts.label + "</b>: " + getCategoryStatsHTML(counts);
                     }
 
-                    if (counts.matches > 0) {
-                        var headerClassName = 'text_header';
-                        if ((counts.label === fullData.info.category_name) && highlightSelectedCategory) {
-                            d3.select(divId)
-                                .append('div')
-                                .attr('class', 'separator')
-                                .html("<b>Selected category</b>");
-                        }
+                    var headerClassName = 'text_header';
+                    if ((counts.label === fullData.info.category_name) && highlightSelectedCategory) {
                         d3.select(divId)
-                            .append("div")
-                            .attr('class', headerClassName)
-                            .html(getCategoryInlineHeadingHTML(counts));
+                            .append('div')
+                            .attr('class', 'separator')
+                            .html("<b>Selected category</b>");
+                    }
+                    d3.select(divId)
+                        .append("div")
+                        .attr('class', headerClassName)
+                        .html(getCategoryInlineHeadingHTML(counts));
 
+                    if (counts.matches > 0) {
                         allContexts
                             .filter(singleDoc => singleDoc.docLabel == counts.labelNum)
                             .forEach(function (singleDoc) {
@@ -1263,10 +1393,10 @@ buildViz = function (d3) {
                                     addSnippets(singleDoc, divId, false);
                                 });
                         }
-                        if ((counts.label === fullData.info.category_name) && highlightSelectedCategory) {
-                            d3.select(divId).append('div').attr('class', 'separator').html("<b>End selected category</b>");
-                            d3.select(divId).append('div').html("<br />");
-                        }
+                    }
+                    if ((counts.label === fullData.info.category_name) && highlightSelectedCategory) {
+                        d3.select(divId).append('div').attr('class', 'separator').html("<b>End selected category</b>");
+                        d3.select(divId).append('div').html("<br />");
                     }
 
 
@@ -1546,7 +1676,7 @@ buildViz = function (d3) {
                 }
             } else if (unifiedContexts && !ignoreCategories) {
                 // extra unified context code goes here
-                console.log("docLabelCountsSorted")
+                console.log("docLabelCountsSorted B")
                 console.log(docLabelCountsSorted)
 
                 docLabelCountsSorted.forEach(function (counts) {
@@ -1882,26 +2012,32 @@ buildViz = function (d3) {
 
         function getCircleForSearchTerm(mysvg, searchTermInfo) {
             var circle = mysvg;
-            if (circle.tagName !== "circle") { // need to clean this thing up
-                circle = mysvg._groups[0][searchTermInfo.ci];
-                if (circle === undefined || circle.tagName != 'circle') {
-                    if (mysvg._groups[0].children !== undefined) {
-                        circle = mysvg._groups[0].children[searchTermInfo.ci];
-                    }
-                }
-                if (circle === undefined || circle.tagName != 'circle') {
-                    if (mysvg._groups[0][0].children !== undefined) {
-                        circle = Array.prototype.filter.call(
-                            mysvg._groups[0][0].children,
-                            x => (x.tagName == "circle" && x.__data__['term'] == searchTermInfo.term)
-                        )[0];
-                    }
-                }
-                if ((circle === undefined || circle.tagName != 'circle') && mysvg._groups[0][0].children !== undefined) {
-                    circle = mysvg._groups[0][0].children[searchTermInfo.ci];
-                }
+            if (circle !== undefined && circle !== null && circle.tagName === "circle") {
+                return circle;
             }
+            circle = svg.selectAll("circle.zoom-point").filter(function (d) {
+                return d !== undefined && d.term === searchTermInfo.term;
+            }).node();
             return circle;
+        }
+
+        function getPageCoordinatesForDatum(datum) {
+            var matrix = svg.node().getScreenCTM().translate(zoomedX(datum.x), zoomedY(datum.y));
+            return {
+                pageX: matrix.e,
+                pageY: matrix.f
+            };
+        }
+
+        function getPageCoordinatesFromEvent() {
+            if (d3.event !== null && d3.event !== undefined
+                && d3.event.pageX !== undefined && d3.event.pageY !== undefined) {
+                return {
+                    pageX: d3.event.pageX,
+                    pageY: d3.event.pageY
+                };
+            }
+            return null;
         }
 
         function showToolTipForTerm(data, mysvg, searchTerm, searchTermInfo, showObscured = true) {
@@ -1915,36 +2051,74 @@ buildViz = function (d3) {
                     .text(searchTerm + " didn't make it into the visualization.");
             } else {
                 d3.select("#" + divName + "-alertMessage").text("");
-                var circle = getCircleForSearchTerm(mysvg, searchTermInfo);
-                if (circle) {
+                var circle = mysvg && mysvg.tagName === "circle" ? mysvg : null;
+                var pageCoordinates = null;
+                if (circle && circle.cx !== undefined && circle.cy !== undefined) {
                     var mySVGMatrix = circle.getScreenCTM().translate(circle.cx.baseVal.value, circle.cy.baseVal.value);
-                    var pageX = mySVGMatrix.e;
-                    var pageY = mySVGMatrix.f;
+                    pageCoordinates = {
+                        pageX: mySVGMatrix.e,
+                        pageY: mySVGMatrix.f
+                    };
                     circle.style["stroke"] = "black";
-                    //@@@@@ try to move to front
-                    //var circlePos = circle.position();
-                    //var el = circle.node()
-                    //showTooltip(searchTermInfo, pageX, pageY, circle.cx.baseVal.value, circle.cx.baseVal.value);
+                    lastCircleSelected = circle;
+                }
+                if (pageCoordinates === null && searchTermInfo.x !== undefined && searchTermInfo.y !== undefined) {
+                    pageCoordinates = getPageCoordinatesForDatum(searchTermInfo);
+                }
+                if (pageCoordinates === null) {
+                    pageCoordinates = getPageCoordinatesFromEvent();
+                }
+                if (circle === null) {
+                    circle = getCircleForSearchTerm(mysvg, searchTermInfo);
+                    if (circle) {
+                        circle.style["stroke"] = "black";
+                        lastCircleSelected = circle;
+                    }
+                }
+                if (pageCoordinates !== null) {
                     showTooltip(
                         data,
                         searchTermInfo,
-                        pageX,
-                        pageY,
+                        pageCoordinates.pageX,
+                        pageCoordinates.pageY,
                         showObscured
                     );
-
-                    lastCircleSelected = circle;
                 }
 
             }
         };
 
+        function stopTermInteractionEvent() {
+            if (d3.event !== null && d3.event !== undefined) {
+                d3.event.stopPropagation();
+                if (d3.event.preventDefault !== undefined) {
+                    d3.event.preventDefault();
+                }
+            }
+        }
+
+        function displayContextsForClickedTerm(data, termInfo) {
+            stopTermInteractionEvent();
+            var runDisplayTermContexts = true;
+            if (alternativeTermFunc != null) {
+                runDisplayTermContexts = alternativeTermFunc(termInfo);
+            }
+            if (runDisplayTermContexts) {
+                displayTermContexts(data, gatherTermContexts(termInfo, includeAllContexts),
+                alwaysJump, includeAllContexts);
+            }
+        }
+
 
         function makeWordInteractive(data, svg, domObj, term, termInfo, showObscured = true) {
             return domObj
+                .style("cursor", "pointer")
                 .on("mouseover", function (d) {
                     showToolTipForTerm(data, svg, term, termInfo, showObscured);
                     d3.select(this).style("stroke", "black");
+                })
+                .on("mousedown", function (d) {
+                    stopTermInteractionEvent();
                 })
                 .on("mouseout", function (d) {
                     tooltip.transition()
@@ -1958,14 +2132,7 @@ buildViz = function (d3) {
                     }
                 })
                 .on("click", function (d) {
-                    var runDisplayTermContexts = true;
-                    if (alternativeTermFunc != null) {
-                        runDisplayTermContexts = alternativeTermFunc(termInfo);
-                    }
-                    if (runDisplayTermContexts) {
-                        displayTermContexts(data, gatherTermContexts(termInfo, includeAllContexts),
-                        alwaysJump, includeAllContexts);
-                    }
+                    displayContextsForClickedTerm(data, termInfo);
                 });
         }
 
@@ -2052,6 +2219,8 @@ buildViz = function (d3) {
                 //.filter(function (d) {return d.display === undefined || d.display === true})
                 .enter()
                 .append("circle")
+                .call(clipToPlot)
+                .attr("class", "zoom-point")
                 .attr("r", function (d) {
                     if (suppressCircles) return 0;
                     if (pValueColors && d.p) {
@@ -2060,10 +2229,10 @@ buildViz = function (d3) {
                     return 2;
                 })
                 .attr("cx", function (d) {
-                    return x(d.x);
+                    return zoomedX(d.x);
                 })
                 .attr("cy", function (d) {
-                    return y(d.y);
+                    return zoomedY(d.y);
                 })
                 .style("fill", function (d) {
                     //.attr("fill", function (d) {
@@ -2083,6 +2252,7 @@ buildViz = function (d3) {
                         return color(d.s);
                     }
                 })
+                .style("cursor", "pointer")
                 .on("mouseover", function (d) {
                     /*var mySVGMatrix = circle.getScreenCTM()n
                         .translate(circle.cx.baseVal.value, circle.cy.baseVal.value);
@@ -2099,14 +2269,11 @@ buildViz = function (d3) {
                     showToolTipForTerm(data, this, d.term, d, true);
                     d3.select(this).style("stroke", "black");
                 })
+                .on("mousedown", function (d) {
+                    stopTermInteractionEvent();
+                })
                 .on("click", function (d) {
-                    var runDisplayTermContexts = true;
-                    if (alternativeTermFunc != null) {
-                        runDisplayTermContexts = alternativeTermFunc(d);
-                    }
-                    if (runDisplayTermContexts) {
-                        displayTermContexts(data, gatherTermContexts(d), alwaysJump, includeAllContexts);
-                    }
+                    displayContextsForClickedTerm(data, d);
                 })
                 .on("mouseout", function (d) {
                     tooltip.transition()
@@ -2127,9 +2294,9 @@ buildViz = function (d3) {
             function censorPoints(datum, getX, getY) {
                 if (suppressCircles !== true) {
                     var term = datum.term;
-                    var curLabel = svg.append("text")
-                        .attr("x", x(getX(datum)))
-                        .attr("y", y(getY(datum)) + 3)
+                    var curLabel = clipToPlot(svg.append("text"))
+                        .attr("x", zoomedX(getX(datum)))
+                        .attr("y", zoomedY(getY(datum)) + 3)
                         .attr("text-anchor", "middle")
                         .text("x");
                     var bbox = curLabel.node().getBBox();
@@ -2153,9 +2320,9 @@ buildViz = function (d3) {
             function censorCircle(xCoord, yCoord) {
                 if (suppressCircles !== true) {
                     console.log("DO NOT SUPRs")
-                    var curLabel = svg.append("text")
-                        .attr("x", x(xCoord))
-                        .attr("y", y(yCoord) + 3)
+                    var curLabel = clipToPlot(svg.append("text"))
+                        .attr("x", zoomedX(xCoord))
+                        .attr("y", zoomedY(yCoord) + 3)
                         .attr("text-anchor", "middle")
                         .text("x");
                     var bbox = curLabel.node().getBBox();
@@ -2231,13 +2398,16 @@ buildViz = function (d3) {
 
                 for (var configI in configs) {
                     var config = configs[configI];
-                    var curLabel = svg.append("text")
+                    var curLabel = clipToPlot(svg.append("text"))
                         //.attr("x", x(data[i].x) + config['xoff'])
                         //.attr("y", y(data[i].y) + config['yoff'])
-                        .attr("x", x(myX) + config['xoff'])
-                        .attr("y", y(myY) + config['yoff'])
-                        .attr('class', 'label')
-                        .attr('class', 'pointlabel')
+                        .attr("x", zoomedX(myX) + config['xoff'])
+                        .attr("y", zoomedY(myY) + config['yoff'])
+                        .attr('class', 'label pointlabel zoom-label')
+                        .attr("data-plot-x", myX)
+                        .attr("data-plot-y", myY)
+                        .attr("data-x-offset", config['xoff'])
+                        .attr("data-y-offset", config['yoff'])
                         .attr('font-family', 'Helvetica, Arial, Sans-Serif')
                         .attr('font-size', termSize)
                         .attr("text-anchor", config['anchor'])
@@ -2440,20 +2610,14 @@ buildViz = function (d3) {
             }
 
             if (fullData['line'] !== undefined) {
-                var valueline = d3.line()
-                    .x(function (d) {
-                        return x(d.x);
-                    })
-                    .y(function (d) {
-                        return y(d.y);
-                    });
                 fullData.line = fullData.line.sort((a, b) => b.x - a.x);
-                svg.append("path")
-                    .attr("class", "line")
+                clipToPlot(svg.append("path"))
+                    .datum(fullData['line'])
+                    .attr("class", "line zoom-line")
                     .style("stroke-dasharray", "5,5")
                     .style("stroke", "#3b719f")
                     .style("stroke-width", "1.25px")
-                    .attr("d", valueline(fullData['line'])).moveToBack();
+                    .attr("d", zoomLinePath(fullData['line'])).moveToBack();
             }
             if (showAxes || showAxesAndCrossHairs) {
 
@@ -2915,24 +3079,113 @@ buildViz = function (d3) {
             if (labelPriorityColumn !== undefined && labelPriorityColumn !== null) {
                 labelPriorityFunction = (a, b) => b.etc[labelPriorityColumn] - a.etc[labelPriorityColumn];
             }
-            labeledPoints = performPartialLabeling(
-                data,
-                labeledPoints,
-                function (d) {
-                    return d.x
-                },
-                function (d) {
-                    return d.y
-                },
-                labelPriorityFunction
-            );
+
+            function getVisiblePlotData() {
+                return data.filter(function (datum) {
+                    if (datum.display !== undefined && datum.display !== true) {
+                        return false;
+                    }
+                    var datumX = zoomedX(datum.x);
+                    var datumY = zoomedY(datum.y);
+                    return datumX >= 0 && datumX <= width && datumY >= 0 && datumY <= height;
+                });
+            }
+
+            function removeLabeledPoints() {
+                labeledPoints.forEach(function (p) {
+                    p.label.remove();
+                    rectHolder.remove(p.rect);
+                });
+                labeledPoints = [];
+            }
+
+            function removePointRects() {
+                pointRects.forEach(function (rect) {
+                    rectHolder.remove(rect);
+                });
+                pointRects = [];
+            }
+
+            function recensorVisiblePoints(visibleData) {
+                if (doCensorPoints) {
+                    visibleData.map(x => x).sort(sortByDist ? euclideanDistanceSort : scoreSort).forEach(function (datum) {
+                        censorPoints(
+                            datum,
+                            function (d) {
+                                return d.x
+                            },
+                            function (d) {
+                                return d.y
+                            }
+                        );
+                    });
+                }
+            }
+
+            function refreshZoomLabels() {
+                removeLabeledPoints();
+                removePointRects();
+                var visibleData = getVisiblePlotData();
+                recensorVisiblePoints(visibleData);
+                labeledPoints = performPartialLabeling(
+                    visibleData,
+                    [],
+                    function (d) {
+                        return d.x
+                    },
+                    function (d) {
+                        return d.y
+                    },
+                    labelPriorityFunction
+                );
+            }
+
+            refreshZoomLabels();
+
+            applyZoomToScatterplot = function () {
+                svg.selectAll(".zoom-point")
+                    .attr("cx", function (d) {
+                        return zoomedX(d.x);
+                    })
+                    .attr("cy", function (d) {
+                        return zoomedY(d.y);
+                    });
+
+                svg.selectAll(".zoom-background-label")
+                    .attr("x", function () {
+                        return zoomedX(+this.getAttribute("data-plot-x"));
+                    })
+                    .attr("y", function () {
+                        return zoomedY(+this.getAttribute("data-plot-y"));
+                    });
+
+                svg.selectAll(".zoom-label")
+                    .attr("x", function () {
+                        return zoomedX(+this.getAttribute("data-plot-x")) + +this.getAttribute("data-x-offset");
+                    })
+                    .attr("y", function () {
+                        return zoomedY(+this.getAttribute("data-plot-y")) + +this.getAttribute("data-y-offset");
+                    });
+
+                svg.selectAll(".zoom-line")
+                    .attr("d", function (d) {
+                        return zoomLinePath(d);
+                    });
+            };
+
+            finishZoomScatterplot = function () {
+                refreshZoomLabels();
+            };
 
             if (backgroundLabels !== null) {
                 backgroundLabels.map(
                     function (label) {
-                        svg.append("text")
-                            .attr("x", x(label.X))
-                            .attr("y", y(label.Y))
+                        clipToPlot(svg.append("text"))
+                            .attr("class", "zoom-background-label")
+                            .attr("x", zoomedX(label.X))
+                            .attr("y", zoomedY(label.Y))
+                            .attr("data-plot-x", label.X)
+                            .attr("data-plot-y", label.Y)
                             .attr("text-anchor", "middle")
                             .style("font-size", "30")
                             .style("fill", "rgb(200,200,200)")
@@ -3024,6 +3277,14 @@ buildViz = function (d3) {
             function populateCorpusStats() {
                 var wordCounts = {};
                 var docCounts = {}
+
+                function getCategoryContextLink(categoryIndex, html) {
+                    return '<a href="#' + divName + '-category' + categoryIndex
+                        + '" style="color: inherit; text-decoration: none; cursor: pointer;">'
+                        + html
+                        + '</a>';
+                }
+
                 fullData.docs.labels.forEach(function (x, i) {
                     var cnt = (
                         fullData.docs.texts[i]
@@ -3085,27 +3346,27 @@ buildViz = function (d3) {
                         '; <b>' + termWord.charAt(0).toUpperCase() + termWord.substr(1).toLowerCase() + ' count: </b>'
                         + wordCount['sums'].reduce((a, b) => a + b, 0).toLocaleString('en')
                     )
-                } else if (unifiedContexts) {
-                    fullData.docs.categories.forEach(function (x, i) {
-                        if (docCounts[x] > 0) {
-                            var message = '';
-                            if (categoryColors !== null && categoryColors[x] !== undefined) {
-                                message += '<td><svg width="14" height="10">'
-                                + '<rect x="0" y="0" width="10" height="10" style="fill:'
-                                + categoryColors[x]+'" /></svg><b>' + x
-                                + '</b></td><td>' + '# ' +  documentWordPlural.charAt(0).toUpperCase()
-                                + documentWordPlural.substr(1).toLowerCase() + ': '
-                                + Number(docCounts[x]).toLocaleString('en')
-                                + '; # ' + termWord + 's: '
-                                + Number(wordCounts[x]).toLocaleString('en')+ '</td>'
-                            } else {
-                                message += '<b>' + x + '</b>: ' + documentWord + ' count: '
-                                    + Number(docCounts[x]).toLocaleString('en')
-                                    + '; '+ termWord +' count: '
-                                    + Number(wordCounts[x]).toLocaleString('en')
-                            }
-                            messages.push(message);
-                        }
+	                } else if (unifiedContexts) {
+	                    fullData.docs.categories.forEach(function (x, i) {
+	                        if (docCounts[x] > 0) {
+	                            var message = '';
+	                            if (categoryColors !== null && categoryColors[x] !== undefined) {
+	                                message += '<td>' + getCategoryContextLink(i, '<svg width="14" height="10">'
+	                                + '<rect x="0" y="0" width="10" height="10" style="fill:'
+	                                + categoryColors[x]+'" /></svg><b>' + x
+	                                + '</b>') + '</td><td>' + getCategoryContextLink(i, '# ' +  documentWordPlural.charAt(0).toUpperCase()
+	                                + documentWordPlural.substr(1).toLowerCase() + ': '
+	                                + Number(docCounts[x]).toLocaleString('en')
+	                                + '; # ' + termWord + 's: '
+	                                + Number(wordCounts[x]).toLocaleString('en')) + '</td>'
+	                            } else {
+	                                message += getCategoryContextLink(i, '<b>' + x + '</b>: ' + documentWord + ' count: '
+	                                    + Number(docCounts[x]).toLocaleString('en')
+	                                    + '; '+ termWord +' count: '
+	                                    + Number(wordCounts[x]).toLocaleString('en'))
+	                            }
+	                            messages.push(message);
+	                        }
                     });
                 } else {
                     [fullData.info.category_name,
@@ -3174,6 +3435,10 @@ buildViz = function (d3) {
             }
 
             function rerender(xCoords, yCoords, color) {
+                this.fullData.data.forEach(function (d, i) {
+                    d.x = xCoords[i];
+                    d.y = yCoords[i];
+                });
                 labeledPoints.forEach(function (p) {
                     p.label.remove();
                     rectHolder.remove(p.rect);
@@ -3201,9 +3466,12 @@ buildViz = function (d3) {
                     //.filter(function (d) {return d.display === undefined || d.display === true})
                     .enter()
                     .append("circle")
-                    .attr("cy", d => d.y)
-                    .attr("cx", d => d.x)
+                    .call(clipToPlot)
+                    .attr("class", "zoom-point")
+                    .attr("cy", d => zoomedY(d.y))
+                    .attr("cx", d => zoomedX(d.x))
                     .attr("r", d => 2)
+                    .style("cursor", "pointer")
                     .on("mouseover", function (d) {
                         /*var mySVGMatrix = circle.getScreenCTM()n
                             .translate(circle.cx.baseVal.value, circle.cy.baseVal.value);
@@ -3218,14 +3486,11 @@ buildViz = function (d3) {
                         showToolTipForTerm(data, this, d.term, d, true);
                         d3.select(this).style("stroke", "black");
                     })
+                    .on("mousedown", function (d) {
+                        stopTermInteractionEvent();
+                    })
                     .on("click", function (d) {
-                        var runDisplayTermContexts = true;
-                        if (alternativeTermFunc != null) {
-                            runDisplayTermContexts = alternativeTermFunc(d);
-                        }
-                        if (runDisplayTermContexts) {
-                            displayTermContexts(data, gatherTermContexts(d), alwaysJump, includeAllContexts);
-                        }
+                        displayContextsForClickedTerm(data, d);
                     })
                     .on("mouseout", function (d) {
                         tooltip.transition()
@@ -3266,7 +3531,8 @@ buildViz = function (d3) {
                     'yLabel': yLabel,
                     'drawXLabel': drawXLabel,
                     'drawYLabel': drawYLabel,
-                    'populateCorpusStats': populateCorpusStats
+                    'populateCorpusStats': populateCorpusStats,
+                    'resetZoom': resetZoom
                 }
             };
         }
@@ -3305,6 +3571,7 @@ buildViz = function (d3) {
         plotInterface.fullData = fullData;
         plotInterface.data = payload.data;
         plotInterface.rerender = payload.rerender;
+        plotInterface.resetZoom = payload.resetZoom;
         plotInterface.populateCorpusStats = payload.populateCorpusStats;
         plotInterface.handleSearch = handleSearch;
         plotInterface.handleSearchTerm = handleSearchTerm;
@@ -3948,4 +4215,3 @@ buildViz = function (d3) {
         return plotInterface
     };
 }(d3);
-

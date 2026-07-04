@@ -96,7 +96,7 @@ from scattertext.termsignificance.ScaledFScoreSignificance import ScaledFScoreSi
 from scattertext.termsignificance.TermSignificance import TermSignificance
 from scattertext.viz import VizDataAdapter, ScatterplotStructure, PairPlotFromScatterplotStructure
 from scattertext.viz.HTMLSemioticSquareViz import HTMLSemioticSquareViz
-from scattertext.semioticsquare.FourSquareAxis import FourSquareAxes
+from scattertext.semioticsquare.FourSquareAxis import FourSquareAxes, TermBasedFourSquare
 from scattertext.termcompaction.ClassPercentageCompactor import ClassPercentageCompactor
 from scattertext.termcompaction.CompactTerms import CompactTerms
 from scattertext.termcompaction.PhraseSelector import PhraseSelector
@@ -134,6 +134,7 @@ from scattertext.features.featoffsets.token_and_feat_offset_getter import TokenF
 from scattertext.tokenizers.transformers import RobertaTokenizerWrapper, BERTTokenizerWrapper
 from scattertext.continuous.sklearnpipeline import RidgeCoefficients
 from scattertext.continuous.ungar import UngarCoefficients
+from scattertext.continuous.mean_posterior_stats import MeanPosteriorStats
 from scattertext.features.RegexFeatAndOffsetGetter import RegexFeatAndOffsetGetter
 from scattertext.representations.LatentSemanticScaling import latent_semantic_scale_from_word2vec, lss_terms
 from scattertext.categorytable.category_table_maker import CategoryTableMaker
@@ -184,7 +185,6 @@ from scattertext.features.roget_offset_getter import RogetOffsetGetter
 from scattertext.termscoring.cliffsdelta import CliffsDelta
 
 PhraseFeatsFromTopicModel = FeatsFromTopicModel  # Ensure backwards compatibility
-
 
 def cognitive_distortions_offset_getter_factory():
     return LexiconFeatAndOffsetGetter(COGNITIVE_DISTORTIONS_LEXICON, COGNITIVE_DISTORTIONS_DEFINITIONS)
@@ -321,7 +321,8 @@ def produce_scattertext_explorer(corpus: object,
                                  category_colors: object = None,
                                  document_word: object = "document",
                                  document_word_plural: object = None,
-                                 category_order: object = None,
+                                 category_order: Optional[List[str]] = None,
+                                 granular_category_order: Optional[List[str]] = None,
                                  include_gradient: bool = False,
                                  left_gradient_term: Optional[str] = None,
                                  middle_gradient_term: Optional[str] = None,
@@ -330,6 +331,7 @@ def produce_scattertext_explorer(corpus: object,
                                  gradient_colors: Optional[List[str]] = None,
                                  category_term_scores: Optional[list[List[float]]] = None,
                                  category_term_score_scaler: Optional[str] = None,
+                                 enable_zoom: object = False,
                                  return_scatterplot_structure: object = False) -> object:
     '''Returns html code of visualization.
 
@@ -621,6 +623,8 @@ def produce_scattertext_explorer(corpus: object,
     document_word_plural : Optional[str], default "document"
     category_order : Optional[list[str]], default None
         Order of categories in line chart
+    granular_category_order: Optional[list[str]], default None
+        Order of granular categories in line chart
     include_gradient : bool, False
         Include gradient at the top of the chart
     left_gradient_term : Optional[str], None by default
@@ -637,6 +641,8 @@ def produce_scattertext_explorer(corpus: object,
         score[category, term] for table visualization
     category_term_score_scaler: Optional[str], None by default
         Javascript function which scales a set of categories scores to between 0 and 1
+    enable_zoom : bool, default False
+        Enable scroll-wheel zooming and drag panning in the JavaScript scatterplot.
     return_scatterplot_structure : bool, default False
         return ScatterplotStructure instead of html
 
@@ -868,6 +874,7 @@ def produce_scattertext_explorer(corpus: object,
         document_word=document_word,
         document_word_plural=document_word_plural,
         category_order=category_order,
+        granular_category_order=granular_category_order,
         include_gradient=include_gradient,
         left_gradient_term=left_gradient_term,
         middle_gradient_term=middle_gradient_term,
@@ -875,7 +882,8 @@ def produce_scattertext_explorer(corpus: object,
         gradient_text_color=gradient_text_color,
         gradient_colors=gradient_colors,
         category_term_score_scaler=category_term_score_scaler,
-        show_chart=show_chart
+        show_chart=show_chart,
+        enable_zoom=enable_zoom
     )
 
     if return_scatterplot_structure:
@@ -933,7 +941,8 @@ def produce_scattertext_html(term_doc_matrix,
                              filter_unigrams=False,
                              height_in_pixels=None,
                              width_in_pixels=None,
-                             term_ranker=termranking.AbsoluteFrequencyRanker):
+                             term_ranker=termranking.AbsoluteFrequencyRanker,
+                             enable_zoom=False):
     '''Returns html code of visualization.
 
     Parameters
@@ -962,6 +971,8 @@ def produce_scattertext_html(term_doc_matrix,
         height of viz in pixels, if None, default to JS's choice
     term_ranker : TermRanker
         TermRanker class for determining term frequency ranks.
+    enable_zoom : bool, default False
+        Enable scroll-wheel zooming, drag panning, and double-click reset in the JavaScript scatterplot.
 
     Returns
     -------
@@ -978,7 +989,12 @@ def produce_scattertext_html(term_doc_matrix,
                  not_category_name=not_category_name,
                  transform=percentile_alphabetical)
 
-    scatterplot_structure = ScatterplotStructure(VizDataAdapter(scatter_chart_data), width_in_pixels, height_in_pixels)
+    scatterplot_structure = ScatterplotStructure(
+        VizDataAdapter(scatter_chart_data),
+        width_in_pixels,
+        height_in_pixels,
+        enable_zoom=enable_zoom
+    )
     return BasicHTMLFromScatterplotStructure(scatterplot_structure).to_html(protocol=protocol)
 
 
@@ -2207,6 +2223,7 @@ def produce_scattertext_table(
         plot_width=800,
         plot_height=600,
         category_order: Optional[List] = None,
+        granular_category_order: Optional[int] = None,
         heading_categories: Optional[List] = None,
         heading_category_order: Optional[List] = None,
         d3_url_struct: Optional[D3URLs] = None,
@@ -2217,6 +2234,11 @@ def produce_scattertext_table(
         header_clickable: bool = False,
         category_term_scores: Optional[np.array] = None,
         category_term_freqs: Optional[np.array] = None,
+        enable_zoom: bool = False,
+        category_grouper: Optional[CharacteristicGrouper] = None,
+        number_of_splits: int = 10,
+        min_category_count: int = 1,
+        max_category_count: Optional[int] = None,
         **kwargs
 ):
     '''
@@ -2229,6 +2251,7 @@ def produce_scattertext_table(
     plot_width: int, Scatterplot width in pixels, default 800
     plot_height: int, Scatterplot height in pixels, default 600
     category_order: Optional[List], list of categories in chronological order, default to sorted list of cats
+    granular_category_order: Optional[List[str], list of categories in chronological order, default to sorted list of cats
     heading_categories: Optional[List], list of new, compacted categories per document
     heading_category_order: Optional[List], order of new, cmpacted categories
     d3_url_struct: Optional[D3URLs]
@@ -2239,6 +2262,11 @@ def produce_scattertext_table(
     header_clickable: bool = False, allow clicking on header to show category scores
     term_category_scores: Optional[np.array]
     term_category_freqs: Optional[np.array]
+    enable_zoom : bool = False, enable scroll-wheel zooming, drag panning, and double-click reset in the scatterplot
+    category_grouper: Optional[CharacteristicGrouper], creates heading categories if heading_categories is None
+    number_of_splits: int, number of CharacteristicGrouper split points if category_grouper is provided
+    min_category_count: int, minimum number of categories per heading group when using category_grouper
+    max_category_count: Optional[int], maximum number of categories per heading group when using category_grouper
     '''
 
     alternative_term_func = '''(function(termDict) {
@@ -2250,6 +2278,16 @@ def produce_scattertext_table(
 
     if 'use_non_text_features' in kwargs or 'non_text' in kwargs or 'use_metadata' in kwargs:
         non_text = kwargs['use_non_text_features']
+
+    if heading_categories is None and category_grouper is not None:
+        if category_order is None:
+            category_order = list(sorted(corpus.get_categories()))
+        heading_categories, heading_category_order = category_grouper.get_new_doc_categories(
+            category_order=category_order,
+            number_of_splits=number_of_splits,
+            min_category_count=min_category_count,
+            max_category_count=max_category_count,
+        )
 
     heading_corpus = corpus
     if heading_categories is not None:
@@ -2277,6 +2315,7 @@ def produce_scattertext_table(
 
     if header_clickable:
         kwargs['include_term_category_counts'] = True
+    kwargs['enable_zoom'] = enable_zoom
 
     if trend_plot_settings is None:
         trend_plot_settings = DispersionPlotSettings(
@@ -2285,7 +2324,13 @@ def produce_scattertext_table(
         )
     # if isinstance(trend_plot_settings, TimePlotSettings):
     # trend_plot_settings = trend_plot_settings.set_category_order(category_order=category_order)
-
+    if granular_category_order is not None:
+        print('gco', granular_category_order)
+        kwargs['granular_category_order'] = granular_category_order
+    elif category_order is not None:
+        print('gco is co', granular_category_order)
+        kwargs['granular_category_order'] = category_order
+    #print('my kwargs', kwargs)
     scatterplot_structure = get_trend_scatterplot_structure(
         corpus=corpus,
         trend_plot_settings=trend_plot_settings,
@@ -2417,6 +2462,8 @@ def get_trend_scatterplot_structure(
     kwargs.setdefault('ignore_categories', False)
     kwargs.setdefault('unified_context', True)
     kwargs['category_order'] = category_order
+    if 'granular_category_order' not in kwargs:
+        kwargs['granular_category_order'] = category_order
     if d3_url_struct is None:
         d3_url_struct = D3URLs()
     scatterplot_structure = dataframe_scattertext(

@@ -2,7 +2,7 @@ import abc
 from typing import Callable, List
 
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.TermDocMatrixWithoutCategories import TermDocMatrixWithoutCategories
 from scattertext.features.featoffsets.flexible_ngram_features import sequence_window

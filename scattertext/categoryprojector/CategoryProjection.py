@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 
 import pandas as pd
 import numpy as np
+from scattertext import Scalers
 
 from scattertext.Scalers import stretch_neg1_to_1
 from scattertext.semioticsquare.halo_utils import term_coordinates_to_halo
-
 
 class CategoryProjectionBase(ABC):
     '''
@@ -77,8 +77,13 @@ class CategoryProjectionBase(ABC):
                 'bottom': list(df.sort_values(by='y', ascending=True).index[:num_terms])}
 
     def get_nearest_terms(self, num_terms: int = 5) -> dict:
+        halo_term_proj = self.get_term_projection()
+        if self.term_projection is not None:
+            halo_term_proj['x'] = Scalers.scale(halo_term_proj['x']) * 2 -1
+            halo_term_proj['y'] = Scalers.scale(halo_term_proj['y']) * 2 -1
+
         return term_coordinates_to_halo(
-            term_coordinates_df=self.get_term_projection(),
+            term_coordinates_df=halo_term_proj,
             num_terms=num_terms
         )
 

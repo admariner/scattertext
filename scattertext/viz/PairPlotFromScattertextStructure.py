@@ -125,4 +125,6 @@ class PairPlotFromScatterplotStructure(object):
                                                           self.term_plot_interface))
             if i != len(terms) - 1:
                 lexicon_html += ',\n'
+        if lexicon_html == '':
+            lexicon_html = '-'
         return lexicon_html

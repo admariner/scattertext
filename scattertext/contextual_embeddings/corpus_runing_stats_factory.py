@@ -9,7 +9,7 @@ from scattertext.contextual_embeddings.doc_splitter import doc_sentence_splitter
 from scattertext.features.FeatsFromSpacyDoc import FeatsFromSpacyDoc
 
 from scattertext.OffsetCorpus import OffsetCorpus
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.ParsedCorpus import ParsedCorpus
 from scattertext.contextual_embeddings.corpus_runing_stats import CorpusRunningStats
@@ -61,7 +61,7 @@ class CorpusRunningStatsFactory:
             doc_segmenter: Optional[Callable[[spacy.tokens.doc.Doc], Iterable[spacy.tokens.span.Span]]] = None,
             token_normalizer: Optional[Callable[[spacy.tokens.Token], str]] = None,
             use_all_tokens_for_category_embeddings: bool = True,
-            weights_to_embeddings: Callable = last_hidden_state_embeddings
+            inputs_to_embeddings: Callable = last_hidden_state_embeddings,
     ):
         """
 
@@ -82,7 +82,7 @@ class CorpusRunningStatsFactory:
             raise Exception("Since the corpus object is not an offset corpus, feats_from_spacy_doc needs to be passed.")
         self.doc_segmenter = doc_sentence_splitter if doc_segmenter is None else doc_segmenter
         self.token_normalizer = lambda x: x.lower_ if token_normalizer is None else token_normalizer
-        self.weights_to_embeddings = weights_to_embeddings
+        self.inputs_to_embeddings = inputs_to_embeddings
         self.use_all_tokens_for_category_embeddings = use_all_tokens_for_category_embeddings
 
     def build(self, verbose: bool = True) -> CorpusRunningStats:
@@ -137,11 +137,13 @@ class CorpusRunningStatsFactory:
                 embeddings = None
                 if len(annots):
                     embeddings, subtoken_offsets = self.__embed_segment(segment, seg_start)
-                    annots.apply(
-                        lambda r: self.__add_term_to_stats(
-                            term=self.corpus.get_metadata_from_index(r.TermIdx),
-                            kw_start=r.Start,
-                            kw_end=r.End,
+                    for annot in annots.itertuples():
+                        #print(annot)
+                        #print(self.corpus.get_metadata_from_index(annot.TermIdx))
+                        self.__add_term_to_stats(
+                            term=self.corpus.get_metadata_from_index(annot.TermIdx),
+                            kw_start=annot.Start,
+                            kw_end=annot.End,
                             embeddings=embeddings,
                             running_stats=running_stats,
                             subtoken_offsets=subtoken_offsets,
@@ -149,9 +151,7 @@ class CorpusRunningStatsFactory:
                             add_to_category_embeddings=not self.use_all_tokens_for_category_embeddings,
                             segment=segment,
                             seg_start=seg_start
-                        ),
-                        axis=1
-                    )
+                        )
 
                 if self.use_all_tokens_for_category_embeddings:
                     if embeddings is None:
@@ -225,14 +225,19 @@ class CorpusRunningStatsFactory:
                     print(s, e, str(segment)[s - seg_start:e - seg_start])
                 import pdb;
                 pdb.set_trace()
-        kw_embedding = embeddings[subtoken_start:subtoken_end].mean(axis=0)
+        if subtoken_end != subtoken_start:
+            embedding_subset = embeddings[subtoken_start:subtoken_end]
+            if len(embedding_subset) == 0:
+                import pdb; pdb.set_trace()
 
-        if not np.isnan(kw_embedding).any():
-            running_stats.add(term=term, cat=cat, embedding=kw_embedding,
-                              add_to_category_embeddings=add_to_category_embeddings)
+            kw_embedding = embedding_subset.mean(axis=0)
+
+            if not np.isnan(kw_embedding).any():
+                running_stats.add(term=term, cat=cat, embedding=kw_embedding,
+                                  add_to_category_embeddings=add_to_category_embeddings)
 
     def __inputs_to_embeddings(self, inputs):
-        return self.weights_to_embeddings(model=self.model, inputs=inputs)
+        return self.inputs_to_embeddings(model=self.model, inputs=inputs)
 
     def __iter_docs_and_cats(self, verbose: bool):
         it = self.corpus.get_df()[

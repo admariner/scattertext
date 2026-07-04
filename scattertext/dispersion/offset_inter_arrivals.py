@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Callable
 import pandas as pd
 import spacy
 import numpy as np
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.util import inherits_from
 from scattertext.OffsetCorpus import OffsetCorpus
@@ -123,7 +123,7 @@ def _collect_term_inter_arrivals_on_concatenated_doc(doc, new_offsets):
             tokens = []
 
         last_token_count = num_tokens_before_first + len(tokens)
-        if last_token_count is 0: last_token_count = 1
+        if last_token_count == 0: last_token_count = 1
         inter_arrivals.append(last_token_count)
     return inter_arrivals
 

@@ -1,4 +1,7 @@
+from typing import Optional, List, Dict
+
 import numpy as np
+import pandas as pd
 
 from scattertext.semioticsquare import SemioticSquare
 from scattertext.termranking import AbsoluteFrequencyRanker
@@ -12,20 +15,23 @@ class FourSquareAxes(SemioticSquare):
     negative dexis is the "right" category.
     '''
 
-    def __init__(self,
-                 term_doc_matrix,
-                 left_categories,
-                 right_categories,
-                 top_categories,
-                 bottom_categories,
-                 left_category_name=None,
-                 right_category_name=None,
-                 top_category_name=None,
-                 bottom_category_name=None,
-                 x_scorer=RankDifference(),
-                 y_scorer=RankDifference(),
-                 term_ranker=AbsoluteFrequencyRanker,
-                 labels=None):
+    def __init__(
+            self,
+            term_doc_matrix,
+            left_categories,
+            right_categories,
+            top_categories,
+            bottom_categories,
+            left_category_name=None,
+            right_category_name=None,
+            top_category_name=None,
+            bottom_category_name=None,
+            x_scorer=RankDifference(),
+            y_scorer=RankDifference(),
+            term_ranker=AbsoluteFrequencyRanker,
+            labels=None,
+            axes: Optional[pd.DataFrame] = None
+    ):
         for param in [left_categories, right_categories, top_categories, bottom_categories]:
             assert type(param) == list
             assert set(param) - set(term_doc_matrix.get_categories()) == set()
@@ -41,13 +47,20 @@ class FourSquareAxes(SemioticSquare):
         self.term_ranker_ = term_ranker
         self.left_categories_, self.right_categories_, self.top_categories_, self.bottom_categories_ \
             = left_categories, right_categories, top_categories, bottom_categories
-        self.axes = self._build_axes()
+        self._build_axes_and_lexicons(axes)
+
+    def _build_axes_and_lexicons(self, axes: pd.DataFrame) -> None:
+        if axes is not None:
+            self._validate_axes_if_not_none(axes=axes)
+            self.axes = axes
+        else:
+            self.axes = self._build_axes()
         self.lexicons = self._build_lexicons()
 
-    def _get_all_categories(self):
+    def _get_all_categories(self) -> List[str]:
         return self.left_categories_ + self.right_categories_ + self.top_categories_ + self.bottom_categories_
 
-    def _build_axes(self, scorer=None):
+    def _build_axes(self, scorer=None) -> pd.DataFrame:
         tdf = self.term_ranker_(self.term_doc_matrix_).get_ranks()
         tdf.columns = [c[:-5] for c in tdf.columns]
 
@@ -64,7 +77,7 @@ class FourSquareAxes(SemioticSquare):
         tdf['counts'] = counts
         return tdf[['x', 'y', 'counts']]
 
-    def get_labels(self):
+    def get_labels(self) -> Dict[str, str]:
         a = self._get_default_a_label()
         b = self._get_default_b_label()
         default_labels = {'a': a,
@@ -81,8 +94,38 @@ class FourSquareAxes(SemioticSquare):
         return {name + '_label': labels.get(name, default_labels[name])
                 for name in default_labels}
 
+    def _validate_axes_if_not_none(self, axes: pd.DataFrame) -> None:
+        assert type(axes) == pd.DataFrame
+        assert {'x','y','counts'} & set(axes.columns) == {'x','y','counts'}
+
     def _get_default_b_label(self):
         return ''
 
     def _get_default_a_label(self):
         return ''
+
+class TermBasedFourSquare(FourSquareAxes):
+    def __init__(
+            self,
+            term_doc_matrix,
+            left_category_name: str,
+            right_category_name: str,
+            top_category_name: str,
+            bottom_category_name: str,
+            axes: pd.DataFrame
+    ):
+        all_categories = term_doc_matrix.get_categories()
+
+        self.left_categories_ = [all_categories[0%len(all_categories)]]
+        self.right_categories_ = [all_categories[1%len(all_categories)]]
+        self.top_categories_ = [all_categories[2%len(all_categories)]]
+        self.bottom_categories_ = [all_categories[3%len(all_categories)]]
+        self.term_doc_matrix_ = term_doc_matrix
+        assert axes is not None
+        self._build_axes_and_lexicons(axes=axes)
+        self._labels = {}
+
+        self.left_category_name_ = left_category_name
+        self.right_category_name_ = right_category_name
+        self.top_category_name_ = top_category_name
+        self.bottom_category_name_ = bottom_category_name

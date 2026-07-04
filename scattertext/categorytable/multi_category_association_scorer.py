@@ -1,7 +1,7 @@
 from typing import Type, Union
 
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext import inherits_from
 from scattertext.termranking import AbsoluteFrequencyRanker

@@ -1,5 +1,5 @@
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 class TokenSequenceSegmenter:
     def __init__(

@@ -1,5 +1,5 @@
 class CoefficientBase:
-    def __init__(self, use_non_text=False):
+    def __init__(self, use_non_text=False) -> None:
         self.use_non_text = use_non_text
 
     def _get_tdm(self, corpus):

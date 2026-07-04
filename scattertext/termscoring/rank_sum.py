@@ -41,7 +41,7 @@ class RankSum(CorpusBasedTermScorer):
 
         it = range(cat_X.shape[0])
         if self.verbose:
-            from tqdm.auto import tqdm
+            from tqdm import tqdm
             it = tqdm(range(cat_X.shape[0]), total=cat_X.shape[0])
         scores = []
         for i in it:

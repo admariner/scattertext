@@ -2,7 +2,7 @@ import re
 
 import scattertext as st
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import spacy
 
 tqdm.pandas()

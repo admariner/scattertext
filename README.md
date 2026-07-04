@@ -12,7 +12,7 @@ so that they don't overlap with other labels or points.
 Cite as: Jason S. Kessler. Scattertext: a Browser-Based Tool for Visualizing how Corpora Differ. ACL System
 Demonstrations. 2017.
 
-Below is an example of using Scattertext to create visualize terms used in 2012 American
+Below is an example of using Scattertext to visualize terms used in 2012 American
 political conventions. The 2,000 most party-associated uni grams are displayed as
 points in the scatter plot. Their x- and y- axes are the dense ranks of their usage by
 Republican and Democratic speakers respectively.
@@ -42,11 +42,13 @@ html = st.produce_scattertext_explorer(
     left_gradient_term='More Republican',
     middle_gradient_term='Metric: Dense Rank Difference',
     right_gradient_term='More Democratic',
+    enable_zoom=True,
 )
 open('./demo_compact.html', 'w').write(html)
 ```
 
-The HTML file written would look like the image below. Click on it for the actual interactive visualization.
+The HTML file written would look like the image below. Click on it for the actual interactive visualization. With
+`enable_zoom=True`, the scatter plot supports mouse-wheel or trackpad zooming and drag panning.
 [![demo_compact.html](https://raw.githubusercontent.com/JasonKessler/jasonkessler.github.io/master/demo_compact.png)](https://jasonkessler.github.io/demo_compact.html)
 
 ## Citation
@@ -79,7 +81,7 @@ Link to paper: [arxiv.org/abs/1703.00565](https://arxiv.org/abs/1703.00565)
     - [Visualizing Empath topics and categories](#visualizing-empath-topics-and-categories)
     - [Visualizing the Moral Foundations 2.0 Dictionary](#visualizing-the-moral-foundations-2.0-dictionary)
     - [Ordering Terms by Corpus Characteristicness](#ordering-terms-by-corpus-characteristicness)
-    - [Document-Based Scatterplots](#document-based-scatterplots)
+    - [Document-Based Scatter Plots](#document-based-scatter-plots)
     - [Using Cohen's d or Hedge's g to visualize effect size](#using-cohens-d-or-hedges-g-to-visualize-effect-size)
     - [Using Cliff's Delta to visualize effect size](#using-cliffs-delta-to-visualize-effect-size)
     - [Using Bi-Normal Separation (BNS) to score terms](#using-bi-normal-separation-bns-to-score-terms)
@@ -102,6 +104,7 @@ Link to paper: [arxiv.org/abs/1703.00565](https://arxiv.org/abs/1703.00565)
     - [Creating T-SNE-style word embedding projection plots](#creating-T-SNE-style-word-embedding-projection-plots)
     - [Using SVD to visualize any kind of word embeddings](#using-svd-to-visualize-any-kind-of-word-embeddings)
     - [Exporting plot to matplotlib](#exporting-plot-to-matplotlib)
+    - [Creating Zoomable Scatter Plots](#creating-zoomable-scatter-plots)
     - [Using the same scale for both axes](#using-the-same-scale-for-both-axes)
 
 - [Examples](#examples)
@@ -136,7 +139,7 @@ to the name `st`, i.e., `import scattertext as st`.
 
 ## Overview
 
-This is a tool that's intended for visualizing what words and phrases
+This is a tool that is intended for visualizing what words and phrases
 are more characteristic of a category than others.
 
 Consider the example at the top of the page.
@@ -166,6 +169,8 @@ on the far-right of the visualization.
 The inspiration for this visualization came from Dataclysm (Rudder, 2014).
 
 Scattertext is designed to help you build these graphs and efficiently label points on them.
+Scatter plots can also be made zoomable by passing `enable_zoom=True` to `produce_scattertext_explorer` or related
+visualization functions.
 
 The documentation (including this readme) is a work in
 progress. Please see the tutorial below as well as
@@ -968,7 +973,7 @@ open('demo_characteristic_chart.html', 'wb').write(html.encode('utf-8'))
 
 [![demo_characteristic_chart.html](https://jasonkessler.github.io/demo_characteristic_chart.png)](https://jasonkessler.github.io/demo_characteristic_chart.html)
 
-### Document-Based Scatterplots
+### Document-Based Scatter Plots
 
 In addition to words, phases and topics, we can make each point correspond to a document. Let's first create
 a corpus object for the 2012 Conventions data set. This explanation follows `demo_pca_documents.py`
@@ -2950,6 +2955,37 @@ fig.savefig('pyplot_export.png', format='png')
 
 [![pyplot](https://jasonkessler.github.io/pyplot_export.png)]
 
+### Creating Zoomable Scatter Plots
+
+Set `enable_zoom=True` to allow mouse-wheel or trackpad zooming and drag panning in the browser. Double-clicking the
+plot resets the zoom.
+
+```pydocstring
+import scattertext as st
+
+df = st.SampleCorpora.ConventionData2012.get_data().assign(
+    parse=lambda df: df.text.apply(st.whitespace_nlp_with_sentences)
+)
+
+corpus = st.CorpusFromParsedDocuments(
+    df,
+    category_col='party',
+    parsed_col='parse',
+).build().get_unigram_corpus().compact(st.AssociationCompactor(2000))
+
+html = st.produce_scattertext_explorer(
+    corpus,
+    category='democrat',
+    category_name='Democratic',
+    not_category_name='Republican',
+    metadata=corpus.get_df()['speaker'],
+    transform=st.Scalers.dense_rank,
+    enable_zoom=True,
+)
+
+open('./demo_zoomable.html', 'w').write(html)
+```
+
 ## Examples
 
 Please see the examples in the [PyData 2017 Tutorial](https://github.com/JasonKessler/Scattertext-PyData) on
@@ -3081,7 +3117,7 @@ Added the following methods:
 ## 0.0.2.32
 
 Added a series of objects to handle uncategorized corpora. Added section on
-[Document-Based Scatterplots](#document-based-scatterplots), and the add_doc_names_as_metadata function.
+[Document-Based Scatter plots](#document-based-scatter-plots), and the add_doc_names_as_metadata function.
 `CategoryColorAssigner` was also added to assign colors to a qualitative categories.
 
 ## 0.0.28-31

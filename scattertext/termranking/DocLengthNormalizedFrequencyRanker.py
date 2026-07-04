@@ -14,7 +14,7 @@ class DocLengthNormalizedFrequencyRanker(TermRanker):
 		X = self.get_term_doc_mat()
 		y = self._corpus.get_category_ids()
 		doc_lengths = X.sum(axis=1)
-		norm_x = np.nan_to_num(X / doc_lengths, 0)
+		norm_x = np.nan_to_num(X / doc_lengths, 0).tocsr()
 		data = {}
 		for i in set(y):
 			cat = self._corpus.get_category_index_store().getval(i)
@@ -42,4 +42,3 @@ class VarianceSensitiveFrequencyRanker(TermRanker):
 			               / (catX.shape[0] - 1))) / np.sqrt(catX.shape[0])
 			return means/ses
 """
-

@@ -38,7 +38,7 @@ class TestCorpusFromFeatureDict(TestCase):
 		self.assertEqual(len(corpus.get_texts()), 4)
 		self.assertEqual(corpus.get_texts()[0], df.text.iloc[0])
 		self.assertEqual(corpus.get_texts()[3], df.text.iloc[3])
-		self.assertFalse(np.array_equal(corpus._X[0,:], corpus._X[0,:]))
+		self.assertTrue(np.array_equal(corpus._X[0, :].toarray(), corpus._X[0, :].toarray()))
 		corpus.get_df()
 
 
@@ -79,6 +79,6 @@ class TestCorpusFromFeatureDict(TestCase):
 		self.assertEqual(len(corpus.get_texts()), 4)
 		self.assertEqual(corpus.get_texts()[0], df.text.iloc[0])
 		self.assertEqual(corpus.get_texts()[3], df.text.iloc[3])
-		self.assertFalse(np.array_equal(corpus._X[0,:], corpus._X[0,:]))
+		self.assertTrue(np.array_equal(corpus._X[0, :].toarray(), corpus._X[0, :].toarray()))
 		expected = pd.DataFrame([{'term': 'word_count', '2016 freq': np.int32(76), '2017 freq': np.int32(30)}]).set_index('term').astype(np.int32)
 		pd.testing.assert_frame_equal(corpus.get_metadata_freq_df(), expected)

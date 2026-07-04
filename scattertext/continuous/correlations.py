@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 from scattertext.TermDocMatrix import TermDocMatrix
 from scipy.stats import pearsonr, spearmanr, kendalltau
+from tqdm import tqdm
 
 from scattertext.continuous.coefficientbase import CoefficientBase
 
@@ -34,19 +35,29 @@ class Correlations(CoefficientBase):
             return kendalltau
 
 
-    def get_correlation_df(self, corpus: TermDocMatrix, document_scores: np.array) -> pd.DataFrame:
+    def get_correlation_df(
+            self,
+            corpus: TermDocMatrix,
+            document_scores: np.array,
+            verbose: bool = False,
+    ) -> pd.DataFrame:
         '''
 
         :param corpus: TermDocMatrix, should just have unigrams
         :param document_scores: np.array, continuous value for each document score
+        :param verbose: bool
         :return: pd.DataFrame
         '''
         assert document_scores.shape == (corpus.get_num_docs(),)
         tdm = self._get_tdm(corpus)
 
+        progress = lambda x: x
+        if verbose:
+            progress = tqdm
+
         return pd.DataFrame(
             [self.__get_correlation_funct()(tdm.T[i].todense().A1, document_scores)
-             for i in range(tdm.shape[1])],
+             for i in progress(range(tdm.shape[1]))],
             columns=self.cols_
         ).assign(
             Term=self._get_terms(corpus),

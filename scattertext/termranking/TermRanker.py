@@ -1,6 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from typing import TYPE_CHECKING
 
+import pandas as pd
+
 if TYPE_CHECKING:
 	from scattertext.TermDocMatrix import TermDocMatrix
 
@@ -67,3 +69,6 @@ class TermRanker:
 	@abstractmethod
 	def get_ranks(self, label_append = ' freq'):
 		pass
+
+	def get_term_sum(self) -> pd.Series:
+		return self.get_ranks().sum(axis=1)

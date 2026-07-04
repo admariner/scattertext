@@ -32,9 +32,8 @@ class ClickableTerms:
 	@staticmethod
 	def _get_onclick_js(term, plot_interface, other_plot_interface = None):
 		if other_plot_interface:
-			return "{other_plot_interface}.drawCategoryAssociation(" \
-				   "{plot_interface}.termDict['{term}'].ci); return false;"\
-				.format(other_plot_interface=other_plot_interface, plot_interface=plot_interface,
+			return "{other_plot_interface}.drawCategoryAssociation('{term}'); return false;"\
+				.format(other_plot_interface=other_plot_interface,
 						term=term.replace("'", "\\'"))
 		return "{plot_interface}.displayTermContexts({plot_interface}.data, {plot_interface}.gatherTermContexts(" \
 					 "{plot_interface}.termDict['%s']));" % (term.replace("'", "\'"))

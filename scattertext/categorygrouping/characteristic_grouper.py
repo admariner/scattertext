@@ -3,7 +3,7 @@ from typing import List, Optional, Callable, Dict, Tuple
 import pandas as pd
 import numpy as np
 from scipy.stats import spearmanr
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.TermDocMatrix import TermDocMatrix
 from scattertext.categorygrouping.characteristic_embedder_base import CategoryEmbedderABC
@@ -37,18 +37,33 @@ class CharacteristicGrouper:
     def group_corpus_categories(
             self,
             category_order: Optional[List[str]] = None,
-            number_of_splits: int = 10
+            number_of_splits: int = 10,
+            min_category_count: int = 1,
+            max_category_count: Optional[int] = None,
     ) -> TermDocMatrix:
-        new_categories, new_categories_order = self.get_new_doc_categories(category_order, number_of_splits)
+        new_categories, new_categories_order = self.get_new_doc_categories(
+            category_order,
+            number_of_splits,
+            min_category_count=min_category_count,
+            max_category_count=max_category_count,
+        )
         return self.corpus.recategorize(new_categories)
 
     def get_new_doc_categories(
             self,
             category_order: Optional[List[str]] = None,
             number_of_splits: int = 10,
+            min_category_count: int = 1,
+            max_category_count: Optional[int] = None,
             verbose=False
     ) -> Tuple[List, List]:
-        category_to_bin_dict = self.get_category_group_dict(category_order, number_of_splits, verbose)
+        category_to_bin_dict = self.get_category_group_dict(
+            category_order,
+            number_of_splits,
+            min_category_count=min_category_count,
+            max_category_count=max_category_count,
+            verbose=verbose,
+        )
         new_categories = [category_to_bin_dict[cat] for cat in self.corpus.get_category_names_by_row()]
 
         seen = set()
@@ -60,6 +75,8 @@ class CharacteristicGrouper:
             self,
             category_order: List[str] = None,
             number_of_splits: int = 10,
+            min_category_count: int = 1,
+            max_category_count: Optional[int] = None,
             verbose=False
     ) -> Dict[str, str]:
         category_order = sorted(self._get_categories()) if category_order is None else category_order
@@ -68,10 +85,20 @@ class CharacteristicGrouper:
             corpus=self.corpus,
             non_text=self.non_text
         )
-        cat_boundaries = self.get_change_point_candidates(
+        change_point_candidates = self.get_change_point_candidates(
             embeddings=embedding_mat,
             ordered_category_names=category_order,
-        ).iloc[:number_of_splits].sort_values(by='Order')
+        )
+        if min_category_count == 1 and max_category_count is None:
+            cat_boundaries = change_point_candidates.iloc[:number_of_splits].sort_values(by='Order')
+        else:
+            cat_boundaries = self.get_constrained_change_points(
+                change_point_candidates=change_point_candidates,
+                number_of_categories=len(category_order),
+                number_of_splits=number_of_splits,
+                min_category_count=min_category_count,
+                max_category_count=max_category_count,
+            )
         intervals = []
         interval_names = []
         last = 0
@@ -88,6 +115,75 @@ class CharacteristicGrouper:
         category_to_bin_dict = {category: interval_names[interval_index.get_loc(i) if i > 0 else 0]
                                 for i, category in enumerate(category_order)}
         return category_to_bin_dict
+
+    def get_constrained_change_points(
+            self,
+            change_point_candidates: pd.DataFrame,
+            number_of_categories: int,
+            number_of_splits: int,
+            min_category_count: int = 1,
+            max_category_count: Optional[int] = None,
+    ) -> pd.DataFrame:
+        if min_category_count < 1:
+            raise ValueError('min_category_count must be at least 1')
+        if max_category_count is not None and max_category_count < min_category_count:
+            raise ValueError('max_category_count must be greater than or equal to min_category_count')
+        if number_of_categories < min_category_count:
+            raise ValueError(
+                'number_of_categories must be greater than or equal to min_category_count'
+            )
+
+        boundaries = []
+        if max_category_count is not None:
+            while max(self.get_group_sizes(boundaries, number_of_categories)) > max_category_count:
+                if len(boundaries) == number_of_splits:
+                    raise ValueError(
+                        'Could not satisfy max_category_count with the requested number_of_splits'
+                    )
+                accepted_boundary = None
+                for order in change_point_candidates['Order'].astype(int):
+                    if order <= 0 or order >= number_of_categories - 1 or order in boundaries:
+                        continue
+                    proposed_boundaries = sorted(boundaries + [order])
+                    group_sizes = self.get_group_sizes(proposed_boundaries, number_of_categories)
+                    if min(group_sizes) < min_category_count:
+                        continue
+                    if max(group_sizes) >= max(self.get_group_sizes(boundaries, number_of_categories)):
+                        continue
+                    accepted_boundary = order
+                    break
+                if accepted_boundary is None:
+                    raise ValueError(
+                        'Could not find change points satisfying min_category_count and max_category_count'
+                    )
+                boundaries = sorted(boundaries + [accepted_boundary])
+
+        for order in change_point_candidates['Order'].astype(int):
+            if len(boundaries) == number_of_splits:
+                break
+            if order <= 0 or order >= number_of_categories - 1 or order in boundaries:
+                continue
+            proposed_boundaries = sorted(boundaries + [order])
+            group_sizes = self.get_group_sizes(proposed_boundaries, number_of_categories)
+            if min(group_sizes) < min_category_count:
+                continue
+            boundaries = proposed_boundaries
+
+        return change_point_candidates[
+            change_point_candidates['Order'].astype(int).isin(boundaries)
+        ].sort_values(by='Order')
+
+    @staticmethod
+    def get_group_sizes(
+            boundaries: List[int],
+            number_of_categories: int,
+    ) -> List[int]:
+        last = -1
+        group_sizes = []
+        for boundary in boundaries + [number_of_categories - 1]:
+            group_sizes.append(boundary - last)
+            last = boundary
+        return group_sizes
 
     def _get_string_categories(self) -> List[str]:
         return [str(c) for c in self.corpus.get_categories()]

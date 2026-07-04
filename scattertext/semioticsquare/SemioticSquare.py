@@ -199,11 +199,12 @@ class SemioticSquare(SemioticSquareBase):
 
     def _build_lexicons(self):
         axes_parts_df = add_radial_parts_and_mag_to_term_coordinates(term_coordinates_df=self.axes)
+        print(axes_parts_df)
         self.axes['color'] = axes_parts_df.Part.apply(
             lambda x: HALO_COLORS.get(
                 # can't figure out why this is needed, so don't change it until you do
-                x.replace('left', 'RIGHT').replace('right', 'left').replace('RIGHT', 'right')
-            )
+                x.replace('left', 'RIGHT').replace('right', 'left').replace('RIGHT', 'right'),
+            ) if type(x) == str else None
         )
         self.lexicons = {
             semiotic_square_label: axes_parts_df[lambda df: df.Part == part].sort_values(by='Mag', ascending=False)

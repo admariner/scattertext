@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import norm, mannwhitneyu, ranksums
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.termscoring.CorpusBasedTermScorer import CorpusBasedTermScorer
 

@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from scattertext.ParsedCorpus import ParsedCorpus
 from spacy.tokens import Span
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 from scattertext.util import inherits_from
 from scattertext.OffsetCorpus import OffsetCorpus

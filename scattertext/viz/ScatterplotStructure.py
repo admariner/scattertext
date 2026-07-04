@@ -88,7 +88,8 @@ class ScatterplotStructure(object):
             category_colors=None,
             document_word="document",
             document_word_plural=None,
-            category_order=None,
+            category_order: Optional[List[str]] =None,
+            granular_category_order: Optional[List[str]] =None,
             include_gradient: bool = False,
             left_gradient_term: Optional[str] = None,
             middle_gradient_term: Optional[str] = None,
@@ -96,7 +97,8 @@ class ScatterplotStructure(object):
             gradient_text_color: Optional[str] = None,
             gradient_colors: Optional[List[str]] = None,
             category_term_score_scaler: Optional[str] = None,
-            show_chart=False
+            show_chart=False,
+            enable_zoom=False
     ):
         '''
 
@@ -271,6 +273,8 @@ class ScatterplotStructure(object):
         document_word_plural : optional[str], default None -> document word + 's'
         category_order : optional[list[str]]
             order categories should be shown
+        granular_category_order : optional[list[str]]
+            if category_order is category groups and not fine-grained categories, use this for the chart
         include_gradient : bool, False
             Include gradient at the top of the chart
         left_gradient_term : Optional[str], None by default
@@ -284,6 +288,8 @@ class ScatterplotStructure(object):
             Javascript function which scales a set of categories scores to between 0 and 1
         show_chart : bool, default False
             Show line graph
+        enable_zoom : bool, default False
+            Enable scroll-wheel zooming and drag panning in the JavaScript scatterplot.
         '''
         self._visualization_data = visualization_data
         self._width_in_pixels = width_in_pixels if width_in_pixels is not None else 1000
@@ -362,6 +368,7 @@ class ScatterplotStructure(object):
         self._document_word = document_word
         self._document_word_plural = document_word_plural if document_word_plural is not None else document_word + 's'
         self._category_order = category_order
+        self._granular_category_order = granular_category_order
         self._show_chart = show_chart
         self._include_gradient = include_gradient
         self._left_gradient_term = left_gradient_term
@@ -370,6 +377,7 @@ class ScatterplotStructure(object):
         self._gradient_colors = gradient_colors
         self._gradient_text_color = gradient_text_color
         self._category_term_score_scaler = category_term_score_scaler
+        self._enable_zoom = enable_zoom
 
     def call_build_visualization_in_javascript(self):
         def js_default_value(x, default='undefined'):
@@ -496,6 +504,7 @@ class ScatterplotStructure(object):
             js_default_string(self._document_word),
             js_default_string(self._document_word_plural),
             json_or_null_or_str(self._category_order),
+            json_or_null_or_str(self._granular_category_order),
             js_bool(self._include_gradient),
             json_or_null(self._left_gradient_term),
             json_or_null(self._middle_gradient_term),
@@ -503,7 +512,8 @@ class ScatterplotStructure(object):
             json_or_null(self._gradient_text_color),
             json_or_null(self._gradient_colors),
             js_default_value_to_null(self._category_term_score_scaler),
-            js_bool(self._show_chart)
+            js_bool(self._show_chart),
+            js_bool(self._enable_zoom)
         ]
         return 'buildViz(' + ',\n'.join(arguments) + ');\n'
 

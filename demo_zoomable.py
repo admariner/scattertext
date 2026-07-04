@@ -1,5 +1,6 @@
 import scattertext as st
 
+
 df = st.SampleCorpora.ConventionData2012.get_data().assign(
     parse=lambda df: df.text.apply(st.whitespace_nlp_with_sentences)
 )
@@ -19,10 +20,9 @@ html = st.produce_scattertext_explorer(
     metadata=corpus.get_df()['speaker'],
     transform=st.Scalers.dense_rank,
     max_overlapping=3,
-    include_gradient=True,
-    left_gradient_term='More Republican',
-    right_gradient_term='More Democratic',
-    middle_gradient_term='Metric: Dense Rank Difference',
+    enable_zoom=True,
 )
-open('./demo_compact.html', 'w').write(html)
-print('open ./demo_compact.html in Chrome')
+
+open('./demo_zoomable.html', 'w').write(html)
+print('open ./demo_zoomable.html in Chrome')
+print('use mouse wheel/trackpad to zoom, drag to pan, and plotInterface.resetZoom() in the console to reset')

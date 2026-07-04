@@ -270,6 +270,11 @@ class TermDocMatrixWithoutCategories(object):
                 term_ranker = term_ranker,
                 non_text = non_text)
 
+    def set_min_documents_per_term(self, minimum_document_count: int, non_text: bool = False) -> Self:
+        tdm = self.get_term_doc_mat(non_text=non_text)
+        term_ids = list(np.nonzero((tdm > 0).sum(axis=0).A1 < minimum_document_count)[0])
+        return self.remove_terms_by_indices(term_ids, False)
+
     def remove_word_by_document_pct(
             self,
             min_document_pct: float = 0.,

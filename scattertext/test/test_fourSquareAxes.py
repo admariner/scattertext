@@ -65,7 +65,7 @@ class TestFourSquareAxes(TestCase):
 		                  'not_b_label': ''})
 		axes = fs.get_axes()
 		self.assertEqual(len(axes), len(corpus.get_terms()))
-		self.assertEqual(set(axes.columns), {'x', 'y', 'counts'})
+		self.assertEqual(set(axes.columns), {'x', 'y', 'counts', 'color'})
 		fs.lexicons
 
 	def _get_test_corpus(self):

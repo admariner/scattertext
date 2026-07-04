@@ -1,10 +1,25 @@
 import numpy as np
 import pandas as pd
 import scipy
+import scipy.sparse
 from scipy.stats import norm
 
 
 class CohensDCalculator(object):
+    def _get_column_mean(self, X):
+        mean = X.mean(axis=0)
+        if scipy.sparse.issparse(mean):
+            return mean.A1
+        return np.asarray(mean).ravel()
+
+    def _get_column_var(self, X):
+        if scipy.sparse.issparse(X):
+            mean = self._get_column_mean(X)
+            mean_sq = np.asarray(X.power(2).mean(axis=0)).ravel()
+            return mean_sq - np.square(mean)
+        var = X.var(axis=0)
+        return np.asarray(var).ravel()
+
     def get_cohens_d_df(self, cat_X, ncat_X, orig_cat_X, orig_ncat_X, correction_method=None):
         empty_cat_X_smoothing_doc = np.zeros((1, cat_X.shape[1]))
         empty_ncat_X_smoothing_doc = np.zeros((1, ncat_X.shape[1]))
@@ -17,15 +32,10 @@ class CohensDCalculator(object):
         n1, n2 = float(smoothed_cat_X.shape[0]), float(smoothed_ncat_X.shape[0])
         n = n1 + n2
         #print(cat_X.shape, type(cat_X))
-        m1 = cat_X.mean(axis=0).A1 if type(cat_X) == np.matrix else cat_X.mean(axis=0)
-        m2 = ncat_X.mean(axis=0).A1 if type(ncat_X) == np.matrix else ncat_X.mean(axis=0)
-        v1 = smoothed_cat_X.var(axis=0).A1 if type(smoothed_cat_X) == np.matrix else smoothed_cat_X.mean(axis=0)
-        v2 = smoothed_ncat_X.var(axis=0).A1 if type(smoothed_ncat_X) == np.matrix else smoothed_ncat_X.mean(axis=0)
-        if len(m1.shape) == 2:
-            m1 = m1.A1
-            m2 = m2.A1
-            v1 = v1.A1
-            v2 = v2.A1
+        m1 = self._get_column_mean(cat_X)
+        m2 = self._get_column_mean(ncat_X)
+        v1 = self._get_column_var(smoothed_cat_X)
+        v2 = self._get_column_var(smoothed_ncat_X)
         s_pooled = np.sqrt(((n2 - 1) * v2 + (n1 - 1) * v1) / (n - 2.))
         cohens_d = (m1 - m2) / s_pooled
         cohens_d_se = np.sqrt(((n - 1.) / (n - 3)) * (4. / n) * (1 + np.square(cohens_d) / 8.))

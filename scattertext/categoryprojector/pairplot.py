@@ -27,7 +27,7 @@ def produce_category_focused_pairplot(corpus,
     :param corpus: TermDocMatrix
     :param category: str, name of a category in the corpus
     :param category_projector: CategoryProjector, a factor analysis of the category/feature vector
-    :param category_projection: CategoryProjection, None by default. If present, overrides category projector
+    :param category_projection: CategoryProjection, None by default. If present, over-rides category projector
     :param kwargs: remaining kwargs for produce_pairplot
     :return: str, HTML
     '''
@@ -99,8 +99,18 @@ def produce_pairplot(corpus,
                      term_y_label=None,  # used if default_to_term_comparison
                      wordfish_style=False,
                      category_metadata_df=None,
+                     enable_zoom=False,
+                     zoom_enabled=None,
                      return_structure=False,
                      **kwargs):
+    '''
+    :param enable_zoom: bool, default False. Enable scroll-wheel zooming, drag panning,
+        and double-click reset in the category and term scatterplots.
+    :param zoom_enabled: bool or None, default None. Alias for enable_zoom.
+    '''
+    if zoom_enabled is not None:
+        enable_zoom = zoom_enabled
+
     if category_projection is None:
         if use_metadata:
             category_projection = category_projector.use_metadata().project_with_metadata(corpus, x_dim=x_dim,
@@ -149,6 +159,7 @@ def produce_pairplot(corpus,
         div_name='cat-plot',
         alternative_term_func=term_plot_change_func,
         highlight_selected_category=highlight_selected_category,
+        enable_zoom=enable_zoom,
     )
     compacted_corpus = AssociationCompactor(
         terms_to_show,
@@ -256,6 +267,7 @@ def produce_pairplot(corpus,
         div_name='d3-div-1',
         unified_context=not wordfish_style,
         highlight_selected_category=highlight_selected_category,
+        enable_zoom=enable_zoom,
     )
     pair_plot_structure = PairPlotFromScatterplotStructure(
         category_scatterplot_structure,

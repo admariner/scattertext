@@ -10,7 +10,7 @@ setup(name='scattertext',
       python_requires='>=3.11',
       packages=find_packages(),
       install_requires=[
-          'numpy>=1.2.6',
+          'numpy<2.0,>=1.2.6',
           'scipy<1.14.0,>=1.7.0',
           'scikit-learn>=1.4',
           'pandas>=2.0.0',

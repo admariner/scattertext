@@ -84,7 +84,7 @@ def pyplot_from_scattertext_structure(
         colors = "k"
     else:
         colors = df.s
-
+    print('start 3  ')
     # Initiate plotting
     ax_plot = None
     if scatterplot_structure._ignore_categories:
@@ -109,6 +109,7 @@ def pyplot_from_scattertext_structure(
     ax_plot.scatter(df.x, df.y, c=colors, s=scatter_size, cmap=cmap)
     xlims = ax_plot.get_xlim()
     ylims = ax_plot.get_ylim()
+    print('start 2', distance_margin_fraction)
 
     ta.allocate_text(
         fig,
@@ -116,12 +117,12 @@ def pyplot_from_scattertext_structure(
         df.x,
         df.y,
         df.term,
-        xlims,
-        ylims,
+        xlims=xlims,
+        ylims=ylims,
         x_scatter=df.x,
         y_scatter=df.y,
         textsize=textsize,
-        distance_margin_fraction=distance_margin_fraction,
+        margin=distance_margin_fraction,
         draw_lines=draw_lines,
         linecolor=linecolor,
         draw_all=draw_all,
@@ -165,15 +166,15 @@ def pyplot_from_scattertext_structure(
     try:
         if scatterplot_structure._y_axis_labels is not None:
             ax_plot.locator_params(axis="y", nbins=len(scatterplot_structure._y_axis_labels))
-
             ax_plot.set_yticks(
                 ax_plot.get_yticks()[1:-1],
                 scatterplot_structure._y_axis_labels,
                 size=7,
                 rotation=90,
             )
+
         else:
-            scatterplot_structure._y_axis_labels
+            ax_plot.locator_params(axis="y", nbins=3)
             ax_plot.set_yticks(
                 ax_plot.get_yticks()[1:-1],
                 ["Low", "Medium", "High"],
@@ -194,7 +195,7 @@ def pyplot_from_scattertext_structure(
 
     # Categories
     alignment = {"horizontalalignment": "left", "verticalalignment": "top"}
-    total_top_terms = scatterplot_structure.top_terms_length * 2 + 2
+    total_top_terms = scatterplot_structure._top_terms_length * 2 + 2
     if not scatterplot_structure._ignore_categories:
         #yp = [i / 22 for i in range(22)]
         yp = [i / total_top_terms for i in range(total_top_terms)]
@@ -211,14 +212,14 @@ def pyplot_from_scattertext_structure(
             ax_cat.text(0.0, yp[i + 1], term, size="small", **alignment)
         ax_cat.text(
             0.0,
-            yp[scatterplot_structure.top_terms_length + 1],
+            yp[scatterplot_structure._top_terms_length + 1],
             "Top " + info["not_category_name"],
             weight="bold",
             size="medium",
             **alignment,
         )
         for i, term in enumerate(info["not_category_terms"]):
-            axs[1].text(0.0, yp[i + scatterplot_structure + 2], term, size="small", **alignment)
+            axs[1].text(0.0, yp[i + scatterplot_structure._top_terms_length + 2], term, size="small", **alignment)
         ax_cat.spines.right.set_visible(False)
         ax_cat.spines.top.set_visible(False)
         ax_cat.spines.bottom.set_visible(False)

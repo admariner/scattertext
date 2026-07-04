@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from tqdm.auto import tqdm
+from tqdm import tqdm
 from scipy.special import ndtri
 from scipy.stats import norm
 

@@ -14,7 +14,9 @@ scattertext_structure = st.produce_scattertext_explorer(
     minimum_term_frequency=5,
     pmi_threshold_coefficient=8,
     width_in_pixels=1000,
-    return_scatterplot_structure=True
+    return_scatterplot_structure=True,
+    top_terms_length=15
 )
 fig = st.produce_scattertext_pyplot(scattertext_structure)
 fig.savefig('pyplot_export.png', format='png')
+print('open pyplot_export.png')
